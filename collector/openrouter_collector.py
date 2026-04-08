@@ -82,13 +82,17 @@ def write_json_atomic(path: Path, payload: Any) -> None:
     with temp_path.open("w", encoding="utf-8") as handle:
         json.dump(payload, handle, indent=2, sort_keys=False)
         handle.write("\n")
+    os.chmod(temp_path, 0o600)
     os.replace(temp_path, path)
 
 
 def append_log(path: Path, message: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
+    existed = path.exists()
     with path.open("a", encoding="utf-8") as handle:
         handle.write(f"[{isoformat_z(utc_now())}] {message}\n")
+    if not existed:
+        os.chmod(path, 0o600)
 
 
 def build_key_url(api_base: str) -> str:

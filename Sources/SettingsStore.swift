@@ -37,7 +37,12 @@ final class SettingsStore: ObservableObject {
 
     private func save() {
         guard let data = try? encoder.encode(settings) else { return }
-        try? data.write(to: fileURL, options: .atomic)
+        do {
+            try data.write(to: fileURL, options: .atomic)
+            try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: fileURL.path)
+        } catch {
+            RuntimeLogger.shared.error("Failed to save settings", error: error, metadata: ["path": fileURL.path])
+        }
     }
 
     func suppressAlerts(for duration: TimeInterval, now: Date = Date()) {

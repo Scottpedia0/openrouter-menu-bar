@@ -47,7 +47,12 @@ final class HardStopExecutor {
             "timestamp": ISO8601DateFormatter().string(from: Date())
         ]
         if let data = try? JSONSerialization.data(withJSONObject: payload, options: [.prettyPrinted, .sortedKeys]) {
-            try? data.write(to: url, options: .atomic)
+            do {
+                try data.write(to: url, options: .atomic)
+                try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
+            } catch {
+                RuntimeLogger.shared.error("Failed to persist hard-stop lock file", error: error, metadata: ["path": url.path])
+            }
         }
     }
 

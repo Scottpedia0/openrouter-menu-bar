@@ -4,6 +4,8 @@ OpenRouter Menu Bar is a lightweight macOS menu bar utility for monitoring OpenR
 
 It is intentionally narrow. The point is to keep OpenRouter spend visible in the top menu bar so runaway usage is obvious fast, while still letting you drill down to app-level spend when you have one key per app.
 
+There is no telemetry or analytics layer in this repo. The app talks to OpenRouter, writes local state under your Application Support folder, and otherwise stays on your machine.
+
 ## What It Does
 
 - shows OpenRouter spend in the macOS menu bar
@@ -26,6 +28,8 @@ Set critical limits directly in OpenRouter. The local hard-kill path is a fallba
 2. Run `scripts/install_launch_agents.sh`.
 3. Log out and back in, or kick the launch agents with `launchctl`.
 4. Look for the `OpenRouter Menu Bar` badge in the macOS menu bar.
+
+The installer stores your key in the macOS login Keychain and keeps launchd plists free of plaintext credentials. That is better than embedding keys in launchd, but it is still user-session security, not hardware-backed isolation.
 
 ## Spend Windows
 
@@ -105,6 +109,13 @@ The repo includes:
 - `scripts/install_launch_agents.sh`
 
 The install script builds the release binary, fills the plist placeholders, installs them into `~/Library/LaunchAgents/`, and bootstraps both agents.
+
+## Distribution Notes
+
+- Public repo source is ready to build locally.
+- The current install path is unsigned source-build territory, not a notarized drag-and-drop Mac app yet.
+- If you plan to hand this to less technical users, the next step is a signed `.app` release flow.
+- If you are upgrading from an older local setup that embedded keys in launchd plists, rotate those keys and remove the old plist files instead of trusting stale credentials.
 
 ## Quick QA
 

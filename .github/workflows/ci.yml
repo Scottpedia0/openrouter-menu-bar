@@ -19,4 +19,6 @@ jobs:
         run: python3 -m py_compile collector/openrouter_collector.py scripts/qa-posture-smoke.py
 
       - name: Lint install script syntax
-        run: bash -n scripts/install_launch_agents.sh
+        run: |
+          bash -n scripts/install_launch_agents.sh
+          bash -n scripts/run_collector.sh

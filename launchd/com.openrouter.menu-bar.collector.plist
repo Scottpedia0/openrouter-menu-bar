@@ -7,19 +7,9 @@
 
     <key>ProgramArguments</key>
     <array>
-        <string>/usr/bin/env</string>
-        <string>python3</string>
-        <string>__REPO_PATH__/collector/openrouter_collector.py</string>
+        <string>__COLLECTOR_WRAPPER__</string>
         <string>--verbose</string>
     </array>
-
-    <key>EnvironmentVariables</key>
-    <dict>
-        <key>OPENROUTER_API_KEY</key>
-        <string>__OPENROUTER_API_KEY__</string>
-        <key>OPENROUTER_MANAGEMENT_API_KEY</key>
-        <string>__OPENROUTER_MANAGEMENT_API_KEY__</string>
-    </dict>
 
     <key>RunAtLoad</key>
     <true/>

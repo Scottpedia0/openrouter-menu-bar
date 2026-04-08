@@ -5,6 +5,7 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 launch_agents_dir="$HOME/Library/LaunchAgents"
 app_support_dir="$HOME/Library/Application Support/OpenRouterMenuBar"
 binary_path="$repo_root/.build/release/OpenRouterMenuBar"
+collector_wrapper_path="$repo_root/scripts/run_collector.sh"
 app_plist_target="$launch_agents_dir/com.openrouter.menubar.app.plist"
 collector_plist_target="$launch_agents_dir/com.openrouter.menubar.collector.plist"
 
@@ -17,27 +18,36 @@ if [[ -z "$runtime_key" && -z "$management_key" ]]; then
 fi
 
 mkdir -p "$launch_agents_dir" "$app_support_dir"
+chmod 700 "$app_support_dir"
 
 echo "Building release binary..."
 swift build -c release --package-path "$repo_root"
+chmod +x "$collector_wrapper_path"
+
+if [[ -n "$runtime_key" ]]; then
+  security add-generic-password -a "$USER" -s OpenRouterMenuBarRuntimeKey -w "$runtime_key" -U >/dev/null
+fi
+
+if [[ -n "$management_key" ]]; then
+  security add-generic-password -a "$USER" -s OpenRouterMenuBarManagementKey -w "$management_key" -U >/dev/null
+fi
 
 python3 <<PY
 from pathlib import Path
+from xml.sax.saxutils import escape
 
 repo_root = Path(${repo_root@Q})
 launch_agents_dir = Path(${launch_agents_dir@Q})
 app_support_dir = Path(${app_support_dir@Q})
 binary_path = Path(${binary_path@Q})
-runtime_key = ${runtime_key@Q}
-management_key = ${management_key@Q}
+collector_wrapper_path = Path(${collector_wrapper_path@Q})
 
 replacements = {
-    "__BINARY_PATH__": str(binary_path),
-    "__WORKING_DIR__": str(repo_root),
-    "__REPO_PATH__": str(repo_root),
-    "__LOG_DIR__": str(app_support_dir),
-    "__OPENROUTER_API_KEY__": runtime_key,
-    "__OPENROUTER_MANAGEMENT_API_KEY__": management_key,
+    "__BINARY_PATH__": escape(str(binary_path)),
+    "__WORKING_DIR__": escape(str(repo_root)),
+    "__REPO_PATH__": escape(str(repo_root)),
+    "__LOG_DIR__": escape(str(app_support_dir)),
+    "__COLLECTOR_WRAPPER__": escape(str(collector_wrapper_path)),
 }
 
 for name in ("com.openrouter.menu-bar.app.plist", "com.openrouter.menu-bar.collector.plist"):
