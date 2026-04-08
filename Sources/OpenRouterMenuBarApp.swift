@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import UserNotifications
 
 @main
 struct OpenRouterMenuBarApp: App {
@@ -19,6 +20,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         runtimeLogger.info("Application did finish launching")
         NSApp.setActivationPolicy(.accessory)
+        requestNotificationAuthorization()
 
         do {
             statusItemController = try StatusItemController(runtimeLogger: runtimeLogger)
@@ -40,5 +42,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         alert.messageText = "Launch Failed"
         alert.informativeText = message
         alert.runModal()
+    }
+
+    private func requestNotificationAuthorization() {
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { [runtimeLogger] granted, error in
+            if let error {
+                runtimeLogger.error("Notification authorization request failed", error: error)
+                return
+            }
+
+            runtimeLogger.info("Notification authorization resolved", metadata: ["granted": granted ? "true" : "false"])
+        }
     }
 }

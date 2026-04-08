@@ -117,8 +117,11 @@ Best public setup: use one OpenRouter key per app, then let the collector read a
             }
 
             Section("Optional automation hook") {
-                TextField("Shell command", text: binding(\.hardStopCommand), axis: .vertical)
+                TextField("Command (no shell operators)", text: binding(\.hardStopCommand), axis: .vertical)
                 TextField("Lock file path", text: binding(\.hardStopLockFilePath))
+                Text("Run a direct command plus arguments, not a shell pipeline. Example: `/usr/bin/pkill -f opencode`")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
 
             Section("Temporary override") {

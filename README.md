@@ -20,10 +20,19 @@ Do not depend on the local hard kill as your only protection.
 
 Set critical limits directly in OpenRouter. The local hard-kill path is a fallback for presence and interruption, not the primary safety boundary.
 
+## Quick Start
+
+1. Export `OPENROUTER_API_KEY` for single-key mode, or `OPENROUTER_MANAGEMENT_API_KEY` for account-wide mode.
+2. Run `scripts/install_launch_agents.sh`.
+3. Log out and back in, or kick the launch agents with `launchctl`.
+4. Look for the `OpenRouter Menu Bar` badge in the macOS menu bar.
+
 ## Spend Windows
 
 - `Last hour` is the rolling 60-minute total
-- `1 day`, `1 week`, and `1 month` are meant to track the same filter-style windows you see in OpenRouter Activity
+- `1 day`, `1 week`, and `1 month` are collector windows that can need time to warm up after a fresh install
+- in management-key mode, the longer windows are seeded from OpenRouter account activity plus the current partial day
+- in runtime-key mode, the longer windows are limited by the local collector history you have accumulated so far
 
 ## App Scoping
 
@@ -36,6 +45,19 @@ Default view is `All OpenRouter`.
 - the collector runs with an OpenRouter management key
 
 Without that setup, the utility still works for whole-account monitoring.
+
+Optional relabeling lives in:
+
+- `~/Library/Application Support/OpenRouterMenuBar/key-aliases.json`
+
+That file can map labels to full keys or pre-hashed key IDs, for example:
+
+```json
+{
+  "Local OpenCode": "sk-or-v1-...",
+  "AWS OpenWork": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+}
+```
 
 ## Local State
 
@@ -72,15 +94,28 @@ Management-key mode for whole-account totals plus per-app scopes:
 OPENROUTER_MANAGEMENT_API_KEY=your_management_key python3 collector/openrouter_collector.py --verbose
 ```
 
+The management key is an account-level admin key, not the key your apps should share for model calls. Use normal per-app runtime keys for each real app, then let the collector read them with the management key.
+
 ## Start At Login
 
-Template launchd plists are included in `launchd/`.
+The repo includes:
 
 - `launchd/com.openrouter.menu-bar.app.plist`
 - `launchd/com.openrouter.menu-bar.collector.plist`
+- `scripts/install_launch_agents.sh`
 
-Fill in the placeholders, copy them into `~/Library/LaunchAgents/`, then load them with `launchctl`.
+The install script builds the release binary, fills the plist placeholders, installs them into `~/Library/LaunchAgents/`, and bootstraps both agents.
 
 ## Quick QA
 
 There is a smoke-test helper at `scripts/qa-posture-smoke.py` for forcing normal, warning, and danger states without spending real money.
+
+It snapshots and restores your existing settings/feed by default. Pass `--keep-state` only if you intentionally want the QA state to stay live afterward.
+
+## Troubleshooting
+
+- If the badge is gray or says `Never`, the collector probably has not written `activity-feed.json` yet.
+- If the badge looks stale, open the popover and check the `Updated ...` timestamp and freshness note.
+- If `One app` has no options, your feed does not have truthful app scopes yet. The usual fix is one key per app plus a management key for the collector.
+- If hard kill does nothing, make sure it is armed and that the optional command is a direct executable plus arguments, not a shell pipeline.
+- If the launch agents fail, check `~/Library/Application Support/OpenRouterMenuBar/app-launchd.log` and `collector-launchd.log`.

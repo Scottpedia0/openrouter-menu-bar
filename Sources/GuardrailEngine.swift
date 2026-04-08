@@ -22,6 +22,7 @@ final class GuardrailEngine {
     private let activityFeedStore: ActivityFeedStore
     private let hardStopExecutor: HardStopExecutor
     private var pendingAcknowledgement: PendingAcknowledgement?
+    private var idleHourBaseline: Double?
 
     init(
         settingsStore: SettingsStore,
@@ -81,7 +82,7 @@ final class GuardrailEngine {
         let weekSpend = doubleAmount(for: .week, snapshots: snapshots)
         let monthSpend = doubleAmount(for: .month, snapshots: snapshots)
         let unattended = isSystemUnattended(idleThresholdMinutes: settings.unattendedIdleMinutes)
-        let unattendedSpend = unattended ? hourSpend : 0
+        let unattendedSpend = unattendedSpendAmount(hourSpend: hourSpend, unattended: unattended)
         let isZeroActivity = hourSpend == 0 && daySpend == 0 && weekSpend == 0 && monthSpend == 0
 
         let warningOffset = max(0, settings.hourlyWarningPercentOverBaseline) / 100.0
@@ -117,7 +118,7 @@ final class GuardrailEngine {
             posture = .danger
             reason = "Unattended danger threshold crossed"
             triggeredWindow = .hour
-            triggeredAmount = hourSpend
+            triggeredAmount = unattendedSpend
         } else if isHourlyWarning || daySpend >= settings.dailyWarningThreshold {
             posture = .warning
             reason = isHourlyWarning ? "Hourly warning threshold crossed" : "Daily warning crossed"
@@ -127,7 +128,7 @@ final class GuardrailEngine {
             posture = .warning
             reason = "Unattended warning crossed"
             triggeredWindow = .hour
-            triggeredAmount = hourSpend
+            triggeredAmount = unattendedSpend
         }
 
         if posture == .normal {
@@ -224,6 +225,20 @@ final class GuardrailEngine {
     private func shouldCarryAcknowledgementThroughIdle(_ pending: PendingAcknowledgement?) -> Bool {
         guard let pending else { return false }
         return pending.acknowledgedAt != nil && pending.acknowledgeMode == .untilGreen
+    }
+
+    private func unattendedSpendAmount(hourSpend: Double, unattended: Bool) -> Double {
+        guard unattended else {
+            idleHourBaseline = nil
+            return 0
+        }
+
+        if idleHourBaseline == nil {
+            idleHourBaseline = hourSpend
+        }
+
+        let baseline = idleHourBaseline ?? hourSpend
+        return max(0, hourSpend - baseline)
     }
 
     private func resolveFeedScope(feed: ActivityFeed?, settings: GuardrailSettings) -> ResolvedFeed {

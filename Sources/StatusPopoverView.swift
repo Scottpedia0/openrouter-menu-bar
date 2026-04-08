@@ -6,7 +6,7 @@ struct StatusPopoverView: View {
     let onOpenSettings: () -> Void
     let onAcknowledgeWarning: (AlertAcknowledgeMode) -> Void
 
-    private let hourWindowHelpText = "Last hour is the rolling 60-minute total. The 1 day, 1 week, and 1 month rows are meant to track the same filter-style windows you see in OpenRouter Activity. Last hour can keep rising briefly even after new usage slows or stops while in-flight requests settle. Need to stop a spike immediately? Open OpenRouter from the menu bar and disable the API key, or use Settings to arm hard kill."
+    private let hourWindowHelpText = "Last hour is the rolling 60-minute total. The longer rows depend on collector history and can need time to warm up after a fresh install. Last hour can keep rising briefly even after new usage slows or stops while in-flight requests settle. Need to stop a spike immediately? Open OpenRouter from the menu bar and disable the API key, or use Settings to arm hard kill."
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -83,6 +83,12 @@ struct StatusPopoverView: View {
                 Text(alertOverrideNote)
                     .font(.caption2)
                     .foregroundStyle(.secondary)
+            }
+
+            if let freshnessNote = viewModel.freshnessNote {
+                Text(freshnessNote)
+                    .font(.caption2)
+                    .foregroundStyle(viewModel.isDataStale ? .orange : .secondary)
             }
 
             HStack {

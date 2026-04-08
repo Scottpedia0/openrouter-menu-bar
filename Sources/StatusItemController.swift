@@ -1,6 +1,7 @@
 import AppKit
 import Foundation
 import SwiftUI
+import UserNotifications
 
 enum StatusItemControllerError: LocalizedError {
     case missingStatusButton
@@ -153,23 +154,19 @@ final class StatusItemController {
     }
 
     private func postNotification(title: String, body: String) {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
-        process.arguments = [
-            "-e",
-            "display notification \(appleScriptString(body)) with title \(appleScriptString(title))"
-        ]
-        do {
-            try process.run()
-            runtimeLogger.info("Posted macOS notification", metadata: ["title": title, "body": body])
-        } catch {
-            runtimeLogger.error("Failed to post notification", metadata: ["error": error.localizedDescription])
-        }
-    }
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.body = body
 
-    private func appleScriptString(_ text: String) -> String {
-        let escaped = text.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"")
-        return "\"\(escaped)\""
+        let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
+        UNUserNotificationCenter.current().add(request) { [runtimeLogger] error in
+            if let error {
+                runtimeLogger.error("Failed to post notification", error: error, metadata: ["title": title, "body": body])
+                return
+            }
+
+            runtimeLogger.info("Posted macOS notification", metadata: ["title": title, "body": body])
+        }
     }
 
     private func handleAlerting(using evaluation: GuardrailEngine.Evaluation) {
@@ -233,18 +230,11 @@ final class StatusItemController {
             return
         }
 
-        openURLInChrome(url)
-    }
-
-    private func openURLInChrome(_ url: URL) {
-        guard let chromeURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.google.Chrome") else {
-            runtimeLogger.error("Google Chrome not found; falling back to system default browser")
-            NSWorkspace.shared.open(url)
+        if !NSWorkspace.shared.open(url) {
+            runtimeLogger.error("Failed to open activity URL in the default browser", metadata: ["url": url.absoluteString])
             return
         }
-
-        let configuration = NSWorkspace.OpenConfiguration()
-        NSWorkspace.shared.open([url], withApplicationAt: chromeURL, configuration: configuration)
+        runtimeLogger.info("Opened activity URL in the default browser", metadata: ["url": url.absoluteString])
     }
 
     private func togglePopover() {

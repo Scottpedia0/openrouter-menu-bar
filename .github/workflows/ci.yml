@@ -1,0 +1,22 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build-and-verify:
+    runs-on: macos-14
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build Swift app
+        run: swift build
+
+      - name: Verify Python helpers
+        run: python3 -m py_compile collector/openrouter_collector.py scripts/qa-posture-smoke.py
+
+      - name: Lint install script syntax
+        run: bash -n scripts/install_launch_agents.sh

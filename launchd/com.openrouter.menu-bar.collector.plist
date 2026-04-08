@@ -17,6 +17,8 @@
     <dict>
         <key>OPENROUTER_API_KEY</key>
         <string>__OPENROUTER_API_KEY__</string>
+        <key>OPENROUTER_MANAGEMENT_API_KEY</key>
+        <string>__OPENROUTER_MANAGEMENT_API_KEY__</string>
     </dict>
 
     <key>RunAtLoad</key>

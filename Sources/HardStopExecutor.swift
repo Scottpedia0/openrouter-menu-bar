@@ -2,6 +2,7 @@ import Foundation
 
 final class HardStopExecutor {
     private var hasExecutedForCurrentIncident = false
+    private let disallowedShellCharacters = CharacterSet(charactersIn: "&;|><`$\n\r")
 
     func executeIfConfigured(reason: String, settings: GuardrailSettings) -> Bool {
         guard !hasExecutedForCurrentIncident else { return false }
@@ -11,12 +12,23 @@ final class HardStopExecutor {
 
         let command = settings.hardStopCommand.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !command.isEmpty else { return true }
+        guard command.rangeOfCharacter(from: disallowedShellCharacters) == nil else { return false }
+        guard let invocation = parseInvocation(command) else { return false }
 
         let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/bin/zsh")
-        process.arguments = ["-lc", command]
-        try? process.run()
-        return true
+        if invocation.executable.hasPrefix("/") {
+            process.executableURL = URL(fileURLWithPath: invocation.executable)
+            process.arguments = invocation.arguments
+        } else {
+            process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+            process.arguments = [invocation.executable] + invocation.arguments
+        }
+        do {
+            try process.run()
+            return true
+        } catch {
+            return false
+        }
     }
 
     func reset() {
@@ -26,6 +38,8 @@ final class HardStopExecutor {
     private func writeLockFile(reason: String, settings: GuardrailSettings) {
         let expandedPath = NSString(string: settings.hardStopLockFilePath).expandingTildeInPath
         let url = URL(fileURLWithPath: expandedPath)
+        let standardizedPath = url.standardizedFileURL.path
+        guard standardizedPath.hasPrefix(NSHomeDirectory()) else { return }
         let directory = url.deletingLastPathComponent()
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let payload = [
@@ -35,5 +49,45 @@ final class HardStopExecutor {
         if let data = try? JSONSerialization.data(withJSONObject: payload, options: [.prettyPrinted, .sortedKeys]) {
             try? data.write(to: url, options: .atomic)
         }
+    }
+
+    private func parseInvocation(_ command: String) -> (executable: String, arguments: [String])? {
+        var tokens: [String] = []
+        var current = ""
+        var quoteCharacter: Character?
+
+        for character in command {
+            if let activeQuote = quoteCharacter {
+                if character == activeQuote {
+                    quoteCharacter = nil
+                } else {
+                    current.append(character)
+                }
+                continue
+            }
+
+            if character == "\"" || character == "'" {
+                quoteCharacter = character
+                continue
+            }
+
+            if character.isWhitespace {
+                if !current.isEmpty {
+                    tokens.append(current)
+                    current.removeAll(keepingCapacity: true)
+                }
+                continue
+            }
+
+            current.append(character)
+        }
+
+        guard quoteCharacter == nil else { return nil }
+        if !current.isEmpty {
+            tokens.append(current)
+        }
+
+        guard let executable = tokens.first else { return nil }
+        return (executable, Array(tokens.dropFirst()))
     }
 }

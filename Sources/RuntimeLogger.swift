@@ -54,6 +54,7 @@ final class RuntimeLogger {
                     try handle.write(contentsOf: data)
                 }
             } catch {
+                fputs("OpenRouterMenuBar logger failed: \(error.localizedDescription)\n", stderr)
             }
         }
     }

@@ -21,6 +21,7 @@ APP_SUPPORT_DIR = Path.home() / "Library" / "Application Support" / "OpenRouterM
 DEFAULT_OUTPUT_PATH = APP_SUPPORT_DIR / "activity-feed.json"
 DEFAULT_STATE_PATH = APP_SUPPORT_DIR / "collector-state.json"
 DEFAULT_LOG_PATH = APP_SUPPORT_DIR / "collector.log"
+DEFAULT_ALIAS_PATH = APP_SUPPORT_DIR / "key-aliases.json"
 DEFAULT_API_BASE = "https://openrouter.ai/api/v1"
 HISTORY_RETENTION_HOURS = 24 * 35
 BROWSER_USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_4_0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36"
@@ -327,83 +328,57 @@ def sha256_hex(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
-def read_dotenv_value(path: Path, env_key: str) -> Optional[str]:
-    if not path.exists():
+def normalize_alias_key(raw_value: str) -> Optional[str]:
+    value = raw_value.strip()
+    if not value:
         return None
-
-    for line in path.read_text(encoding="utf-8").splitlines():
-        stripped = line.strip()
-        if not stripped or stripped.startswith("#") or "=" not in stripped:
-            continue
-
-        key, raw_value = stripped.split("=", 1)
-        normalized_key = key.replace("export ", "").strip()
-        if normalized_key != env_key:
-            continue
-
-        value = raw_value.strip().strip("'").strip('"')
-        return value or None
-
+    if value.startswith("sk-or-"):
+        return sha256_hex(value)
+    if re.fullmatch(r"[0-9a-fA-F]{64}", value):
+        return value.lower()
     return None
 
 
-def read_json_key(path: Path, field_path: list[str]) -> Optional[str]:
-    if not path.exists():
-        return None
-
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return None
-
-    current: Any = payload
-    for field in field_path:
-        if not isinstance(current, dict):
-            return None
-        current = current.get(field)
-
-    return current if isinstance(current, str) and current else None
-
-
-def read_jsonc_api_key(path: Path) -> Optional[str]:
-    if not path.exists():
-        return None
-
-    try:
-        text = path.read_text(encoding="utf-8")
-    except OSError:
-        return None
-
-    match = re.search(r'"apiKey"\s*:\s*"([^"]+)"', text)
-    if not match:
-        return None
-
-    value = match.group(1).strip()
-    return value or None
+def alias_entries(payload: Any) -> list[tuple[str, str]]:
+    entries: list[tuple[str, str]] = []
+    if isinstance(payload, dict):
+        for label, value in payload.items():
+            if isinstance(label, str) and isinstance(value, str):
+                entries.append((label, value))
+    elif isinstance(payload, list):
+        for item in payload:
+            if not isinstance(item, dict):
+                continue
+            label = item.get("label")
+            value = item.get("hash") or item.get("key")
+            if isinstance(label, str) and isinstance(value, str):
+                entries.append((label, value))
+    return entries
 
 
-def local_key_aliases() -> dict[str, str]:
-    alias_sources: list[tuple[str, Optional[str]]] = [
-        ("Local OpenCode", read_json_key(Path.home() / ".config" / "opencode" / "opencode.json", ["provider", "openrouter", "options", "apiKey"])),
-        (
-            "Local OpenWork",
-            read_jsonc_api_key(
-                Path.home()
-                / "Library"
-                / "Application Support"
-                / "com.differentai.openwork"
-                / "workspaces"
-                / "starter"
-                / "opencode.jsonc"
-            ),
-        ),
-        ("Go2Local", read_dotenv_value(Path("/Applications/Go2Local.app/Contents/Resources/.env"), "OPENROUTER_API_KEY")),
-    ]
+def configured_key_aliases() -> dict[str, str]:
+    alias_paths: list[Path] = []
+    env_path = os.environ.get("OPENROUTER_KEY_ALIASES_PATH", "").strip()
+    if env_path:
+        alias_paths.append(Path(env_path).expanduser())
+    alias_paths.append(DEFAULT_ALIAS_PATH)
 
     aliases: dict[str, str] = {}
-    for label, key_value in alias_sources:
-        if isinstance(key_value, str) and key_value.startswith("sk-or-"):
-            aliases[sha256_hex(key_value)] = label
+    seen_paths: set[Path] = set()
+    for alias_path in alias_paths:
+        resolved_path = alias_path.expanduser()
+        if resolved_path in seen_paths or not resolved_path.exists():
+            continue
+        seen_paths.add(resolved_path)
+        try:
+            payload = json.loads(resolved_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        for label, raw_value in alias_entries(payload):
+            normalized_key = normalize_alias_key(raw_value)
+            normalized_label = label.strip()
+            if normalized_key and normalized_label:
+                aliases[normalized_key] = normalized_label
 
     return aliases
 
@@ -474,7 +449,7 @@ def write_feed(config: Config) -> dict[str, Any]:
         activity_rows = fetch_activity_rows(config.management_api_key, config.api_base)
         activity_by_date = activity_totals_by_date(activity_rows)
         key_histories = key_histories_from_state(previous_state)
-        scopes, next_key_state = build_app_scopes_from_keys(account_keys, key_histories, fetched_at_dt, local_key_aliases())
+        scopes, next_key_state = build_app_scopes_from_keys(account_keys, key_histories, fetched_at_dt, configured_key_aliases())
 
         usage_hourly = Decimal("0")
         current_day_usage = Decimal("0")
@@ -483,12 +458,12 @@ def write_feed(config: Config) -> dict[str, Any]:
             usage_hourly += Decimal(str(direct["hour"]))
             current_day_usage += decimal_from_value(next((key.get("usage_daily") for key in account_keys if isinstance(key, dict) and key.get("hash") == scope["key"]), 0), "usage_daily")
 
-        usage_daily = activity_window_total(activity_by_date, current_day_usage, 1)
-        usage_weekly = activity_window_total(activity_by_date, current_day_usage, 7)
-        usage_monthly = activity_window_total(activity_by_date, current_day_usage, 30)
+        usage_daily = activity_window_total(activity_by_date, current_day_usage, 0)
+        usage_weekly = activity_window_total(activity_by_date, current_day_usage, 6)
+        usage_monthly = activity_window_total(activity_by_date, current_day_usage, 29)
 
         source_description = (
-            "Truthful OpenRouter account-wide spend using a management key: Last hour is the rolling 60-minute total from local collector history, and 1 day / 1 week / 1 month match OpenRouter Activity-style windows built from /activity plus the current partial day from /keys. App scopes come from per-key labels."
+            "Truthful OpenRouter account-wide spend using a management key: Last hour is the rolling 60-minute total from local collector history, and 1 day / 1 week / 1 month are trailing windows built from /activity daily buckets plus the current partial day from /keys. App scopes come from per-key labels or your optional key-aliases.json."
         )
         payload = {
             "sourceDescription": source_description,
@@ -536,7 +511,7 @@ def write_feed(config: Config) -> dict[str, Any]:
         usage_monthly = decimal_from_value(key_data.get("usage_monthly"), "usage_monthly")
 
         history = append_history_point(history_points_from_state(previous_state), fetched_at_dt, usage_total)
-        usage_hourly, history_span_minutes = hourly_delta(history, fetched_at_dt, usage_total)
+        usage_hourly, history_span_minutes = rolling_delta(history, fetched_at_dt, usage_total, 1)
 
         if history_span_minutes >= 60:
             source_description = (
