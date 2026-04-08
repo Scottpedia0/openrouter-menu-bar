@@ -6,6 +6,18 @@ It is intentionally narrow. The point is to keep OpenRouter spend visible in the
 
 There is no telemetry or analytics layer in this repo. The app talks to OpenRouter, writes local state under your Application Support folder, and otherwise stays on your machine.
 
+## Screenshots
+
+![Menu bar popover](docs/screenshots/menu-bar-popover.png)
+
+Live menu bar popover showing posture, current spend windows, and acknowledgement controls.
+
+![Settings and hard kill](docs/screenshots/settings-hard-kill.png)
+
+Settings view for baseline thresholds, warning and danger posture, and the local fallback hard-kill cap.
+
+The screenshots currently come from the internal working build, so the older `Guardrail` label may still appear in the UI captures.
+
 ## What It Does
 
 - shows OpenRouter spend in the macOS menu bar
